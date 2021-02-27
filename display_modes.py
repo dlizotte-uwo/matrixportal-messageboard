@@ -157,7 +157,7 @@ class WeatherMode(displayio.Group):
 
     def fetch_weather(self):
         try:
-            self.wdata = self.network.fetch_data(self.WEATHER_URL,json_path=([],))[0]
+            self.wdata = self.network.fetch_data(self.WEATHER_URL,json_path=([],))
             print("Response is", self.wdata)
             weather_timestamp = time.monotonic()
         except RuntimeError as e:

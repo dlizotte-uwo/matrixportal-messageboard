@@ -1,6 +1,6 @@
 import gc
 print("Free memory: %d" % gc.mem_free())
-from adafruit_matrixportal.matrixportal import MatrixPortal
+from adafruit_matrixportal.matrixportal import Graphics,Network
 gc.collect()
 import adafruit_minimqtt.adafruit_minimqtt as MQTT
 gc.collect()
@@ -24,22 +24,15 @@ except ImportError:
     raise
 
 # --- Display setup ---
-matrixportal = MatrixPortal(status_neopixel=board.NEOPIXEL, debug=False, bit_depth=5)
+network = Network(status_neopixel=board.NEOPIXEL)
 gc.collect()
-display = matrixportal.display
-network = matrixportal.network
+graphics = Graphics(bit_depth=5)
+display = graphics.display
+gc.collect()
 
 # Rotate display if needed
 display.rotation = 180
 
-# Just for status indication
-matrixportal.add_text(
-    text_position=(0,0),
-    text_anchor_point=(0.0,0.0)
-)
-gc.collect()
-
-matrixportal.set_text("Connecting")
 network.connect()
 gc.collect()
 print("Free memory after network connect: %d" % gc.mem_free())
@@ -48,7 +41,7 @@ font = terminalio.FONT
 
 air_mode = AirMode()
 message_mode = MessageMode(font=font)
-weather_mode = WeatherMode(font=font,network=matrixportal.network,
+weather_mode = WeatherMode(font=font,network=network,
     location=secrets["openweather_location"],token=secrets["openweather_token"])
 current_mode = weather_mode
 
@@ -112,8 +105,6 @@ mqtt_client.add_topic_callback("display/message", display_message)
 gc.collect()
 
 print("Free memory after collect: %d" % gc.mem_free())
-
-matrixportal.set_text("READY.")
 
 if current_mode:
     display.show(current_mode)
