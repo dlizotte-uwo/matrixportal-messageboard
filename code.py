@@ -1,20 +1,11 @@
 import gc
-print("Free memory: %d" % gc.mem_free())
 from adafruit_matrixportal.matrixportal import Graphics,Network
-gc.collect()
 import adafruit_minimqtt.adafruit_minimqtt as MQTT
-gc.collect()
 import adafruit_esp32spi.adafruit_esp32spi_socket as socket
-gc.collect()
 import time
 import board
 import terminalio
-gc.collect()
-# import adafruit_logging as logging
 from display_modes import AirMode, WeatherMode, MessageMode
-gc.collect()
-
-print("Free memory after imports: %d" % gc.mem_free())
 
 # Get wifi details and more from a secrets.py file
 try:
@@ -25,10 +16,8 @@ except ImportError:
 
 # --- Display setup ---
 network = Network(status_neopixel=board.NEOPIXEL)
-gc.collect()
 graphics = Graphics(bit_depth=5)
 display = graphics.display
-gc.collect()
 
 # Rotate display if needed
 display.rotation = 180
@@ -44,8 +33,6 @@ message_mode = MessageMode(font=font)
 weather_mode = WeatherMode(font=font,network=network,
     location=secrets["openweather_location"],token=secrets["openweather_token"])
 current_mode = weather_mode
-
-gc.collect()
 
 # Handle mqtt message to set display mode: On/Off Air, Messages, Weather
 def display_mode(mqtt_client, topic, message):
@@ -103,19 +90,22 @@ mqtt_client.add_topic_callback("display/mode", display_mode)
 mqtt_client.add_topic_callback("display/message", display_message)
 
 gc.collect()
-
 print("Free memory after collect: %d" % gc.mem_free())
 
 if current_mode:
     display.show(current_mode)
     gc.collect()
 
+print("Free memory after show: %d" % gc.mem_free())
+
 while True:
     try:
-        mqtt_client.loop(.001)
+        mqtt_client.loop(.01)
         if current_mode:
             if not current_mode.update():
-                if message_mode: # If there are messages
+                # Current mode returns False if it's "done"
+                # and doesn't want to be shown anymore
+                if  message_mode: # If there are messages
                     current_mode = message_mode
                 else: # If there are no messages
                     current_mode = weather_mode
