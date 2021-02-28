@@ -1,0 +1,1 @@
+ls -1 *.png | egrep -v -e '-1f9b[9a]|1f3f[b-f]|-264[02]-' | sed 's/.png//g' | xargs -I{} magick {}.png -gamma 0.76 -background black -alpha remove -alpha off -adaptive-resize 21x21 -colors 16 -type Palette BMP:bmps/{}.bmp
