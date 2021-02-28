@@ -1,13 +1,12 @@
-import gc
 from adafruit_display_text.label import Label
-gc.collect()
-
+from adafruit_bitmap_font import bitmap_font
 import board
 from digitalio import DigitalInOut, Direction, Pull
-from adafruit_bitmap_font import bitmap_font
 import displayio
 import json
 import time
+import gc
+import terminalio
 
 # So all can use buttons
 
@@ -27,7 +26,7 @@ up_button.pull = Pull.UP
 
 class AirMode(displayio.Group):
 
-    def __init__(self, *):
+    def __init__(self,*):
         super().__init__(max_size=3)
 
         self.mode = None
@@ -92,9 +91,9 @@ class AirMode(displayio.Group):
 class WeatherMode(displayio.Group):
 
     def _temp_color(temp):
-        if temp < 0:
+        if temp < -0.05:
             return 0x5050F8
-        elif temp > 0:
+        elif temp > 0.05:
             return 0xF8D030
         else:
             return 0xF8F8F8
@@ -114,7 +113,7 @@ class WeatherMode(displayio.Group):
         self.network = network
 
         if font is None:
-            self.font = bitmap_font.load_font("fonts/6x10_DJL.bdf")
+            self.font = terminalio.FONT
         else:
             self.font = font
 
@@ -243,7 +242,7 @@ class MessageMode(displayio.Group):
         self.display_message_timestamp = 0
 
         if not font:
-            self.font = bitmap_font.load_font("fonts/c64.bdf")
+            self.font = terminalio.FONT
         else:
             self.font = font
 
@@ -251,8 +250,8 @@ class MessageMode(displayio.Group):
         self._text = Label(
             font=self.font,
             max_glyphs=33,
-            x=0,y=-2,
-            anchor_point=(0.0,0.0),
+            anchored_position=(64,-2),
+            anchor_point=(1.0,0.0),
             color=0x0088FF,
             line_spacing=0.75
         )
@@ -308,8 +307,14 @@ class MessageMode(displayio.Group):
             self._text.text = ""
         try:
             picture = self.message_list[self.current_message]['picture']
+            if not picture:
+                raise KeyError
         except KeyError:
-            picture = None
+            try:
+                emoji = self.message_list[self.current_message]['emoji']
+                picture = "bmps/emojis/{:x}.bmp".format(ord(emoji[0]))
+            except (KeyError,IndexError):
+                picture = None
         print("Displaying {}, {}, {}.".format(self.current_message,self._text,picture))
         if self._bg_group:
             self._bg_group.pop()
