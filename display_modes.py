@@ -7,6 +7,7 @@ import json
 import time
 import gc
 import terminalio
+import os
 
 # So all can use buttons
 
@@ -233,6 +234,10 @@ class WeatherMode(displayio.Group):
 
 class MessageMode(displayio.Group):
 
+    def _justify(strings):
+        new = "\n".join(["{:>10}".format(s) for s in strings.split('\n')])
+        return new
+
     def __init__(self,msg_duration=5,*,font=None):
         super().__init__(max_size=2)
         self.msg_duration = msg_duration
@@ -249,11 +254,11 @@ class MessageMode(displayio.Group):
         self._bg_group = displayio.Group(max_size=1)
         self._text = Label(
             font=self.font,
-            max_glyphs=33,
-            anchored_position=(64,-2),
-            anchor_point=(1.0,0.0),
-            color=0x0088FF,
-            line_spacing=0.75
+            max_glyphs=50,
+            anchored_position=(64,32),
+            anchor_point=(1.0,1.0),
+            color=0x787878,
+            line_spacing=0.8
         )
         self.append(self._bg_group)
         self.append(self._text)
@@ -302,7 +307,7 @@ class MessageMode(displayio.Group):
         gc.collect()
         try:
             self._text.text = ""
-            self._text.text = self.message_list[self.current_message]['text']
+            self._text.text = MessageMode._justify(self.message_list[self.current_message]['text'])
         except KeyError:
             self._text.text = ""
         try:
@@ -312,7 +317,13 @@ class MessageMode(displayio.Group):
         except KeyError:
             try:
                 emoji = self.message_list[self.current_message]['emoji']
-                picture = "bmps/emojis/{:x}.bmp".format(ord(emoji[0]))
+                full_emoji = "bmps/emojis/" + "-".join(["{:x}".format(ord(cp)) for cp in emoji]) + ".bmp"
+                try:
+                    os.stat(full_emoji)
+                    picture = full_emoji
+                except OSError:
+                    print("Backing off to simpler emoji.")
+                    picture = "bmps/emojis/{:x}.bmp".format(ord(emoji[0]))
             except (KeyError,IndexError):
                 picture = None
         print("Displaying {}, {}, {}.".format(self.current_message,self._text,picture))
