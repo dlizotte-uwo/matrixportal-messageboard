@@ -19,12 +19,6 @@ up_button = DigitalInOut(board.BUTTON_UP)
 up_button.direction = Direction.INPUT
 up_button.pull = Pull.UP
 
-# =========================== Mode Classes ===========================
-
-# Class implementing ON AIR / OFF AIR sign
-# Construct, call set_mode, then show on display.
-# Update in main loop
-
 class AirMode(displayio.Group):
 
     def __init__(self,*):
@@ -182,9 +176,12 @@ class WeatherMode(displayio.Group):
             self.pressure.append(self.wdata["main"]["pressure"])
             if len(self.pressure) > 6:
                 self.pressure.pop(0)
-            n = len(self.pressure)
-            mean_press = sum(self.pressure) / n
-            self.pressure_slope = sum([(i - (n-1)/2) * (self.pressure[i] - mean_press) for i in range(n)])
+            elif len(self.pressure) >= 2:
+                n = len(self.pressure)
+                mean_press = sum(self.pressure) / n
+                self.pressure_slope = sum([(i - (n-1)/2) * (self.pressure[i] - mean_press) for i in range(n)])
+            else:
+                self.pressure_slope = None
             print("Pressure readings: {}".format(self.pressure))
             print("Pressure slope: {}".format(self.pressure_slope))
 
@@ -207,7 +204,7 @@ class WeatherMode(displayio.Group):
                 while self.pressure:
                     self.pressure.pop()
                 self.pressure.append(self.wdata["main"]["pressure"])
-                self.pressure_slope = 0
+                self.pressure_slope = None
                 gc.collect()
             if now % 15 < 5:
                 self.windspeed_l.text = "{:3.0f} ".format(self.wdata["wind"]["speed"]*3.6) # m/s to kph
@@ -221,7 +218,9 @@ class WeatherMode(displayio.Group):
             else:
                 self.windspeed_l.text = "{:4.0f}".format(self.wdata["main"]["pressure"])
                 self.windspeed_unit_l.text = " h\u33A9"
-                if self.pressure_slope > 0.1:
+                if self.pressure_slope is None:
+                    self.winddir_l.text = ""
+                elif self.pressure_slope > 0.1:
                     self.winddir_l.text = "↥"
                     self.winddir_l.color = 0x40C000
                 elif self.pressure_slope < -0.1:
@@ -356,6 +355,3 @@ class MessageMode(displayio.Group):
             print(e)
         gc.collect()
         print("Free memory after adding message: %d" % gc.mem_free())
-
-
-# ======================== End Mode Classes ===========================
