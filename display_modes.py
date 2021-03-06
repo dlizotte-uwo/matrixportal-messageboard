@@ -99,11 +99,13 @@ class WeatherMode(displayio.Group):
         self.WEATHER_URL = "http://api.openweathermap.org/data/2.5/weather?q={}&units=metric&appid={}"\
             .format(location,token)
 
-        self.weather_timeout = 600
-        self.weather_timestamp = 0
+        now = time.monotonic()
+
+        self.data_timeout = 600
+        self.data_timestamp = 0
         self.wdata = {}
         self.pressure = []
-        self.pressure_slope = 0
+        self.pressure_slope = None
 
         self.network = network
 
@@ -125,6 +127,11 @@ class WeatherMode(displayio.Group):
         TEXT_COLOR = 0x301040
         WIND_COLOR = 0x78E078
         self.WDIR_COLOR = 0xF08070
+
+        self.display_timestamp = now
+        self.display_timeout = 5
+        self.display_mode = 0
+        self.display_modes = 3
 
         self.temp_l = Label(self.font,max_glyphs=5,color=0x5050F8,
             anchored_position=(64-2*f_w,-3),anchor_point=(1.0,0.0),line_spacing=1.0)
@@ -149,14 +156,6 @@ class WeatherMode(displayio.Group):
         self.append(self._bg_group)
         self.append(self.weather1)
 
-    def fetch_weather(self):
-        try:
-            self.wdata = self.network.fetch_data(self.WEATHER_URL,json_path=([],))
-            print("Response is", self.wdata)
-            weather_timestamp = time.monotonic()
-        except RuntimeError as e:
-            print("Some error occured getting weather! -", e)
-
     def _winddir_char(self,d_string):
         d = float(d_string)
         didx = round(d / (360/8)) % 8
@@ -164,10 +163,13 @@ class WeatherMode(displayio.Group):
 
     def update(self):
         now = time.monotonic()
-        if not self.weather_timestamp or now - self.weather_timestamp > self.weather_timeout:
-            self.weather_timestamp = now
-            self.fetch_weather()
-
+        if not self.data_timestamp or now - self.data_timestamp > self.data_timeout:
+            self.data_timestamp = now
+            try:
+                self.wdata = self.network.fetch_data(self.WEATHER_URL,json_path=([],))
+                print("Response is", self.wdata)
+            except RuntimeError as e:
+                print("Some error occured getting weather! -", e)
             self.temp_l.color = WeatherMode._temp_color(self.wdata["main"]["temp"])
             self.temp_l.text = u"{: 2.1f}".format(self.wdata["main"]["temp"])
             self.temp_unit_l.text = "°C"
@@ -194,41 +196,48 @@ class WeatherMode(displayio.Group):
                 displayio.OnDiskBitmap(bg_file),x=1,y=1,
                 pixel_shader=displayio.ColorConverter()))
             gc.collect()
+
+        if not down_button.value:
+            # Wait for button release
+            while not down_button.value:
+                pass
+            # Avoid allocating new list?? idk...
+            while self.pressure:
+                self.pressure.pop()
+            self.pressure.append(self.wdata["main"]["pressure"])
+            self.pressure_slope = None
+            gc.collect()
+
+        if now - self.display_timestamp > self.display_timeout:
+            self.display_timestamp = now
+            self.display_mode = (self.display_mode + 1) % self.display_modes
+            if self.display_mode == 0:
+                return False
+
+        if self.display_mode == 0:
+            self.windspeed_l.text = "{:3.0f} ".format(self.wdata["wind"]["speed"]*3.6) # m/s to kph
+            self.windspeed_unit_l.text = "kph"
+            self.winddir_l.text = self._winddir_char(self.wdata["wind"]["deg"])
+            self.winddir_l.color = self.WDIR_COLOR
+        elif self.display_mode == 1:
+            self.windspeed_l.text = "{:2.0f} ".format(self.wdata["main"]["humidity"])
+            self.windspeed_unit_l.text = "%rh"
+            self.winddir_l.text = ""
         else:
-            #Not time to re-fetch. What to do?
-            if not down_button.value:
-                # Wait for button release
-                while not down_button.value:
-                    pass
-                # Avoid allocating new list?? idk...
-                while self.pressure:
-                    self.pressure.pop()
-                self.pressure.append(self.wdata["main"]["pressure"])
-                self.pressure_slope = None
-                gc.collect()
-            if now % 15 < 5:
-                self.windspeed_l.text = "{:3.0f} ".format(self.wdata["wind"]["speed"]*3.6) # m/s to kph
-                self.windspeed_unit_l.text = "kph"
-                self.winddir_l.text = self._winddir_char(self.wdata["wind"]["deg"])
-                self.winddir_l.color = self.WDIR_COLOR
-            elif now % 15 < 10:
-                self.windspeed_l.text = "{:2.0f} ".format(self.wdata["main"]["humidity"])
-                self.windspeed_unit_l.text = "%rh"
+            self.windspeed_l.text = "{:4.0f}".format(self.wdata["main"]["pressure"])
+            self.windspeed_unit_l.text = " h\u33A9"
+            if self.pressure_slope is None:
                 self.winddir_l.text = ""
+            elif self.pressure_slope > 0.1:
+                self.winddir_l.text = "↥"
+                self.winddir_l.color = 0x40C000
+            elif self.pressure_slope < -0.1:
+                self.winddir_l.text = "↧"
+                self.winddir_l.color = 0xC04000
             else:
-                self.windspeed_l.text = "{:4.0f}".format(self.wdata["main"]["pressure"])
-                self.windspeed_unit_l.text = " h\u33A9"
-                if self.pressure_slope is None:
-                    self.winddir_l.text = ""
-                elif self.pressure_slope > 0.1:
-                    self.winddir_l.text = "↥"
-                    self.winddir_l.color = 0x40C000
-                elif self.pressure_slope < -0.1:
-                    self.winddir_l.text = "↧"
-                    self.winddir_l.color = 0xC04000
-                else:
-                    self.winddir_l.text = "\u00AD"
-                    self.winddir_l.color = 0x444444
+                self.winddir_l.text = "\u00AD"
+                self.winddir_l.color = 0x444444
+        return True
 
 
 class MessageMode(displayio.Group):
@@ -242,8 +251,8 @@ class MessageMode(displayio.Group):
         self.msg_duration = msg_duration
 
         self.message_list = []
-        self.current_message = 0
-        self.display_message_timestamp = 0
+        self.current_message = None
+        self.display_timestamp = time.monotonic()
 
         if not font:
             self.font = terminalio.FONT
@@ -261,7 +270,6 @@ class MessageMode(displayio.Group):
         )
         self.append(self._bg_group)
         self.append(self._text)
-        self.timestamp = 0
 
     # Returns True if there are still messages
     # Returns False otherwise
@@ -274,7 +282,7 @@ class MessageMode(displayio.Group):
         down_v = down_button.value
         if up_v and down_v:
             # If no buttons are pressed, do this check.
-            if now - self.timestamp < self.msg_duration:
+            if now - self.display_timestamp < self.msg_duration:
                 return bool(self.message_list)
         if not up_v:
             # If up button is pressed, wait for press to stop
@@ -286,24 +294,28 @@ class MessageMode(displayio.Group):
             while not down_button.value:
                 pass
             print("Down button release.")
-            # delete this message and go to next.
+            # delete this message and go to previous one.
             print("Deleting message {}.".format(self.current_message))
             self.message_list.pop(self.current_message)
-            # This will be incremented below
-            self.current_message -= 1
             if self._bg_group:
                 self._bg_group.pop()
-            gc.collect()
-        if not self.message_list: # Could now be empty because of deletion
-            self._text.text = ""
-            self.current_message = 0
-            gc.collect()
-            return False
-        # Advance current_message to next message
-        self.current_message = (self.current_message + 1) % len(self.message_list)
-        self.timestamp = now
-        # Display next message
-        gc.collect()
+            if self.message_list:
+                self.current_message = (self.current_message - 1) % len(self.message_list)
+                if self.current_message == len(self.message_list) - 1:
+                    self.current_message = None # Fresh start
+            else:
+                self._text.text = ""
+                return False
+        # No buttons pressed if we got here
+        self.display_timestamp = now
+        if self.current_message is not None:
+            next_message = (self.current_message + 1) % len(self.message_list)
+            if next_message == 0:
+                self.current_message = None
+                return False
+        else:
+            next_message = 0
+        self.current_message = next_message
         try:
             self._text.text = ""
             self._text.text = MessageMode._justify(self.message_list[self.current_message]['text'])
@@ -340,11 +352,9 @@ class MessageMode(displayio.Group):
         gc.collect()
         return True
 
-
     # True iff there are messages in the list
     def __bool__(self):
         return bool(self.message_list)
-
 
     def json_message(self, mqtt_client, topic, message):
         print("New message on topic {0}: {1}".format(topic, message))

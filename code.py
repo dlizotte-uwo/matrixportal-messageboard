@@ -45,21 +45,16 @@ def display_mode(mqtt_client, topic, message):
         air_mode.set_submode("OffAir")
         current_mode = air_mode
     elif message == "Messages":
+        message_mode.display_timestamp = time.monotonic()
         current_mode = message_mode
     elif message == "Weather":
+        message_mode.display_timestamp = time.monotonic()
         current_mode = weather_mode
     display.show(current_mode)
 
 # Handle display/message messages to add new message
-# Switch display mode to Messages automatically
 def display_message(mqtt_client, topic, message):
-    global current_mode
     message_mode.json_message(mqtt_client, topic, message)
-    if not current_mode == message_mode:
-        gc.collect()
-        current_mode = message_mode
-        display.show(current_mode)
-
 
 # ========= Set up MQTT ============
 
@@ -105,10 +100,15 @@ while True:
             if not current_mode.update():
                 # Current mode returns False if it's "done"
                 # and doesn't want to be shown anymore
-                if  message_mode: # If there are messages
+                if (current_mode == weather_mode) and message_mode:
+                    message_mode.display_timestamp = 0
+                    message_mode.current_message = None
                     current_mode = message_mode
-                else: # If there are no messages
+                    current_mode.update()
+                else:
+                    weather_mode.display_timestamp = time.monotonic()
                     current_mode = weather_mode
+                    current_mode.update()
                 display.show(current_mode)
                 gc.collect()
         #print(gc.mem_free())
