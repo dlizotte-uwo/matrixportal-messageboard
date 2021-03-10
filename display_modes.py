@@ -115,7 +115,7 @@ class WeatherMode(displayio.Group):
             self.font = font
 
         self.symfont = bitmap_font.load_font("fonts/6x10_DJL.bdf")
-        self.symfont.load_glyphs('°Ckph%r↑↗→↘↓↙←↖↥↧\u33A9\u00AD')
+        self.symfont.load_glyphs('°Ckph%r↑↗→↘↓↙←↖↥↧\u33A9\u00AD ')
 
         bb = self.font.get_bounding_box()
         (f_w,f_h) = bb[0], bb[1]
@@ -217,7 +217,10 @@ class WeatherMode(displayio.Group):
         if self.display_mode == 0:
             self.windspeed_l.text = "{:3.0f} ".format(self.wdata["wind"]["speed"]*3.6) # m/s to kph
             self.windspeed_unit_l.text = "kph"
-            self.winddir_l.text = self._winddir_char(self.wdata["wind"]["deg"])
+            if self.wdata["wind"]["speed"] > 0:
+                self.winddir_l.text = self._winddir_char(self.wdata["wind"]["deg"])
+            else:
+                self.winddir_l.text = ""
             self.winddir_l.color = self.WDIR_COLOR
         elif self.display_mode == 1:
             self.windspeed_l.text = "{:2.0f} ".format(self.wdata["main"]["humidity"])
