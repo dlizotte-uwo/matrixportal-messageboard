@@ -86,12 +86,21 @@ class AirMode(displayio.Group):
 class WeatherMode(displayio.Group):
 
     def _temp_color(temp):
-        if temp < -0.05:
+        if temp <= -10:
+            return 0x2068B0
+        elif temp < -0.05:
             return 0x5050F8
-        elif temp > 0.05:
-            return 0xF8D030
-        else:
+        elif temp < 0.05:
             return 0xF8F8F8
+        elif temp < 10:
+            return 0xFFE020
+        elif temp < 20:
+            return 0xFF9000
+        elif temp < 30:
+            return 0xFF4000
+        else:
+            return 0xFF0000
+
 
     def __init__(self,*,font=None,network=None,location=None,token=None):
         super().__init__(max_size=3)
