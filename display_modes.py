@@ -9,8 +9,6 @@ import gc
 import terminalio
 import os
 
-# So all can use buttons
-
 down_button = DigitalInOut(board.BUTTON_DOWN)
 down_button.direction = Direction.INPUT
 down_button.pull = Pull.UP
@@ -154,21 +152,14 @@ class WeatherMode(displayio.Group):
             anchored_position=(64,16),anchor_point=(1.0,0.5),line_spacing=1.0)
         self.text_l = Label(self.font,max_glyphs=12,color=TEXT_COLOR,
             anchored_position=(1,32),anchor_point=(0.0,1.0),line_spacing=1.0)
-
         self.weather1.append(self.temp_l)
         self.weather1.append(self.temp_unit_l)
         self.weather1.append(self.windspeed_l)
         self.weather1.append(self.windspeed_unit_l)
         self.weather1.append(self.winddir_l)
         self.weather1.append(self.text_l)
-
         self.append(self._bg_group)
         self.append(self.weather1)
-
-    def _winddir_char(self,d_string):
-        d = float(d_string)
-        didx = round(d / (360/8)) % 8
-        return '↓↙←↖↑↗→↘'[didx]
 
     def update(self):
         now = time.monotonic()
@@ -179,7 +170,6 @@ class WeatherMode(displayio.Group):
                 self.data_timestamp = now
             except RuntimeError as e:
                 print("Some error occurred getting weather! -", e)
-                # Try again in 30 seconds
                 self.data_timestamp = (now - self.data_timeout) + 30
                 if not self.wdata:
                     return True
@@ -231,7 +221,8 @@ class WeatherMode(displayio.Group):
             self.windspeed_l.text = "{:3.0f} ".format(self.wdata["wind"]["speed"]*3.6) # m/s to kph
             self.windspeed_unit_l.text = "kph"
             if self.wdata["wind"]["speed"] > 0:
-                self.winddir_l.text = self._winddir_char(self.wdata["wind"]["deg"])
+                didx = round(float(self.wdata["wind"]["deg"]) / (360/8)) % 8
+                self.winddir_l.text = '↓↙←↖↑↗→↘'[didx]
             else:
                 self.winddir_l.text = ""
             self.winddir_l.color = self.WDIR_COLOR
