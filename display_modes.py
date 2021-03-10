@@ -173,12 +173,16 @@ class WeatherMode(displayio.Group):
     def update(self):
         now = time.monotonic()
         if not self.data_timestamp or now - self.data_timestamp > self.data_timeout:
-            self.data_timestamp = now
             try:
                 self.wdata = self.network.fetch_data(self.WEATHER_URL,json_path=([],))
                 print("Response is", self.wdata)
+                self.data_timestamp = now
             except RuntimeError as e:
-                print("Some error occured getting weather! -", e)
+                print("Some error occurred getting weather! -", e)
+                # Try again in 30 seconds
+                self.data_timestamp = (now - self.data_timeout) + 30
+                if not self.wdata:
+                    return True
             self.temp_l.color = WeatherMode._temp_color(self.wdata["main"]["temp"])
             self.temp_l.text = u"{: 2.1f}".format(self.wdata["main"]["temp"])
             self.temp_unit_l.text = "°C"
