@@ -37,20 +37,25 @@ current_mode = weather_mode
 # Handle mqtt message to set display mode: On/Off Air, Messages, Weather
 def display_mode(mqtt_client, topic, message):
     global current_mode
+    global messages_only
     print("New message on topic {0}: {1}".format(topic, message))
     if message == "OnAir":
         air_mode.set_submode("OnAir")
         current_mode = air_mode
+        messages_only = False
     elif message == "OffAir":
         air_mode.set_submode("OffAir")
         current_mode = air_mode
+        messages_only = False
     elif message == "Messages" and message_mode:
         message_mode.display_timestamp = 0
         message_mode.current_message = None
         current_mode = message_mode
+        messages_only = True
     elif message == "Weather":
         weather_mode.display_timestamp = time.monotonic()
         current_mode = weather_mode
+        messages_only = False
     current_mode.update()
     display.show(current_mode)
 
@@ -95,19 +100,23 @@ if current_mode:
 
 print("Free memory after show: %d" % gc.mem_free())
 
+messages_only = False
+
 while True:
     try:
         mqtt_client.loop(.01)
         if current_mode:
             if not current_mode.update():
                 # Current mode returns False if it's "done"
-                # and doesn't want to be shown anymore
-                if message_mode and (current_mode != message_mode):
+                if (current_mode == message_mode) and messages_only:
                     message_mode.display_timestamp = 0
                     message_mode.current_message = None
+                elif (current_mode != message_mode) and message_mode:
+                    # Switch to messages
                     current_mode = message_mode
                     current_mode.update()
-                else:
+                elif not messages_only or not message_mode:
+                    # Switch to weather
                     weather_mode.display_timestamp = time.monotonic()
                     current_mode = weather_mode
                     current_mode.update()
