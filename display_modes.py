@@ -100,7 +100,7 @@ class WeatherMode(displayio.Group):
             return 0xFF0000
 
 
-    def __init__(self,*,font=None,network=None,location=None,token=None):
+    def __init__(self,*,network=None,location=None,token=None):
         super().__init__(max_size=3)
 
         self.WEATHER_URL = "http://api.openweathermap.org/data/2.5/weather?q={}&units=metric&appid={}"\
@@ -116,10 +116,7 @@ class WeatherMode(displayio.Group):
 
         self.network = network
 
-        if font is None:
-            self.font = terminalio.FONT
-        else:
-            self.font = font
+        self.font = terminalio.FONT
 
         self.symfont = bitmap_font.load_font("fonts/6x10_DJL.bdf")
         self.symfont.load_glyphs('°Ckph%r↑↗→↘↓↙←↖↥↧\u33A9\u00AD ')
@@ -256,6 +253,7 @@ class MessageMode(displayio.Group):
     def __init__(self,msg_duration=5,*,font=None):
         super().__init__(max_size=2)
         self.msg_duration = msg_duration
+        self.persist = False
 
         self.message_list = []
         self.current_message = None
@@ -295,6 +293,9 @@ class MessageMode(displayio.Group):
             # If up button is pressed, wait for press to stop
             while not up_button.value:
                 pass
+            self.persist = False
+            self.current_message = None
+            return False
         # Up and/or down buttons are pressed (active low), or it's time to update
         if not down_v:
             # If down button is pressed, wait for press to stop

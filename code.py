@@ -26,36 +26,29 @@ network.connect()
 gc.collect()
 print("Free memory after network connect: %d" % gc.mem_free())
 
-font = terminalio.FONT
-
 air_mode = AirMode()
-message_mode = MessageMode(font=font)
-weather_mode = WeatherMode(font=font,network=network,
-    location=secrets["openweather_location"],token=secrets["openweather_token"])
+message_mode = MessageMode()
+weather_mode = WeatherMode(network=network,location=secrets["openweather_location"],token=secrets["openweather_token"])
 current_mode = weather_mode
 
 # Handle mqtt message to set display mode: On/Off Air, Messages, Weather
 def display_mode(mqtt_client, topic, message):
     global current_mode
-    global messages_only
     print("New message on topic {0}: {1}".format(topic, message))
     if message == "OnAir":
         air_mode.set_submode("OnAir")
         current_mode = air_mode
-        messages_only = False
     elif message == "OffAir":
         air_mode.set_submode("OffAir")
         current_mode = air_mode
-        messages_only = False
     elif message == "Messages" and message_mode:
         message_mode.display_timestamp = 0
         message_mode.current_message = None
+        message_mode.persist = True
         current_mode = message_mode
-        messages_only = True
     elif message == "Weather":
         weather_mode.display_timestamp = time.monotonic()
         current_mode = weather_mode
-        messages_only = False
     current_mode.update()
     display.show(current_mode)
 
@@ -92,7 +85,6 @@ mqtt_client.add_topic_callback("display/mode", display_mode)
 mqtt_client.add_topic_callback("display/message", display_message)
 
 gc.collect()
-print("Free memory after collect: %d" % gc.mem_free())
 
 if current_mode:
     display.show(current_mode)
@@ -100,22 +92,19 @@ if current_mode:
 
 print("Free memory after show: %d" % gc.mem_free())
 
-messages_only = False
-
 while True:
     try:
         mqtt_client.loop(.01)
         if current_mode:
             if not current_mode.update():
                 # Current mode returns False if it's "done"
-                if (current_mode == message_mode) and messages_only:
-                    message_mode.display_timestamp = 0
+                if (current_mode == message_mode) and message_mode.persist:
                     message_mode.current_message = None
                 elif (current_mode != message_mode) and message_mode:
                     # Switch to messages
                     current_mode = message_mode
                     current_mode.update()
-                elif not messages_only or not message_mode:
+                else:
                     # Switch to weather
                     weather_mode.display_timestamp = time.monotonic()
                     current_mode = weather_mode
