@@ -99,6 +99,7 @@ while True:
             if not current_mode.update():
                 # Current mode returns False if it's "done"
                 if (current_mode == message_mode) and message_mode.persist:
+                    message_mode.display_timestamp = 0
                     message_mode.current_message = None
                 elif (current_mode != message_mode) and message_mode:
                     # Switch to messages

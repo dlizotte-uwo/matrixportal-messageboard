@@ -295,6 +295,7 @@ class MessageMode(displayio.Group):
                 pass
             self.persist = False
             self.current_message = None
+            self.display_timestamp = 0
             return False
         # Up and/or down buttons are pressed (active low), or it's time to update
         if not down_v:
@@ -313,6 +314,7 @@ class MessageMode(displayio.Group):
                     self.current_message = None # Fresh start
             else:
                 self._text.text = ""
+                self.persist = False
                 return False
         # No buttons pressed if we got here
         self.display_timestamp = now
