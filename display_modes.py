@@ -6,7 +6,7 @@ import displayio
 import json
 import time
 import gc
-import terminalio
+from terminalio import FONT
 import os
 
 down_button = DigitalInOut(board.BUTTON_DOWN)
@@ -116,7 +116,7 @@ class WeatherMode(displayio.Group):
 
         self.network = network
 
-        self.font = terminalio.FONT
+        self.font = FONT
 
         self.symfont = bitmap_font.load_font("fonts/6x10_DJL.bdf")
         self.symfont.load_glyphs('°Ckph%r↑↗→↘↓↙←↖↥↧\u33A9\u00AD ')
@@ -260,7 +260,7 @@ class MessageMode(displayio.Group):
         self.display_timestamp = time.monotonic()
 
         if not font:
-            self.font = terminalio.FONT
+            self.font = FONT
         else:
             self.font = font
 

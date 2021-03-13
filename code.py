@@ -4,8 +4,12 @@ import adafruit_minimqtt.adafruit_minimqtt as MQTT
 import adafruit_esp32spi.adafruit_esp32spi_socket as socket
 import time
 import board
-import terminalio
+
+gc.collect()
+
 from display_modes import AirMode, WeatherMode, MessageMode
+
+gc.collect()
 
 # Get wifi details and more from a secrets.py file
 try:
@@ -115,4 +119,11 @@ while True:
         #print(gc.mem_free())
     except (MQTT.MMQTTException, RuntimeError) as e:
         print(e)
-        mqtt_client.reconnect()
+        if error_file:
+            error_file.write(e)
+        try:
+            mqtt_client.reconnect()
+        except Exception as e:
+            if error_file:
+                error_file.write(e)
+        time.sleep(1)
