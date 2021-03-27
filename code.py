@@ -1,4 +1,5 @@
 import gc
+import sys
 from adafruit_matrixportal.matrixportal import Graphics,Network
 import adafruit_minimqtt.adafruit_minimqtt as MQTT
 import adafruit_esp32spi.adafruit_esp32spi_socket as socket
@@ -7,7 +8,12 @@ import board
 
 gc.collect()
 
-from display_modes import AirMode, WeatherMode, MessageMode
+from display_modes import AirMode, WeatherMode, MessageMode, up_button
+
+if not up_button.value:
+    error_file = open("error_log.txt","aw")
+else:
+    error_file = None
 
 gc.collect()
 
@@ -28,7 +34,7 @@ display.rotation = 180
 
 network.connect()
 gc.collect()
-print("Free memory after network connect: %d" % gc.mem_free())
+print(f"Free memory after network connect: {gc.mem_free()}")
 
 air_mode = AirMode()
 message_mode = MessageMode()
@@ -38,7 +44,7 @@ current_mode = weather_mode
 # Handle mqtt message to set display mode: On/Off Air, Messages, Weather
 def display_mode(mqtt_client, topic, message):
     global current_mode
-    print("New message on topic {0}: {1}".format(topic, message))
+    print(f"New message on topic {topic}: {message}")
     if message == "OnAir":
         air_mode.set_submode("OnAir")
         current_mode = air_mode
@@ -76,7 +82,7 @@ mqtt_client = MQTT.MQTT(
 
 # mqtt_client.enable_logger(logging,logging.DEBUG)
 
-print("Attempting to connect to %s" % mqtt_client.broker)
+print(f"Attempting to connect to {mqtt_client.broker}")
 mqtt_client.connect(keep_alive=60)
 
 print("Subscribing to topics.")
@@ -94,7 +100,7 @@ if current_mode:
     display.show(current_mode)
     gc.collect()
 
-print("Free memory after show: %d" % gc.mem_free())
+print(f"Free memory after show: {gc.mem_free()}")
 
 while True:
     try:
@@ -117,13 +123,8 @@ while True:
                 display.show(current_mode)
                 gc.collect()
         #print(gc.mem_free())
-    except (MQTT.MMQTTException, RuntimeError) as e:
-        print(e)
+    except BaseException as e:
+        print(str(e))
         if error_file:
-            error_file.write(e)
-        try:
-            mqtt_client.reconnect()
-        except Exception as e:
-            if error_file:
-                error_file.write(e)
-        time.sleep(1)
+            sys.print_exception(e,error_file)
+        raise e

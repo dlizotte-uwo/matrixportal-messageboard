@@ -347,7 +347,7 @@ class MessageMode(displayio.Group):
                     picture = "bmps/emojis/{:x}.bmp".format(ord(emoji[0]))
             except (KeyError,IndexError):
                 picture = None
-        print("Displaying {}, {}, {}.".format(self.current_message,self._text,picture))
+        print("Displaying {}, {}, {}.".format(self.current_message,self._text.text,picture))
         if self._bg_group:
             self._bg_group.pop()
         gc.collect()
@@ -367,11 +367,11 @@ class MessageMode(displayio.Group):
         return bool(self.message_list)
 
     def json_message(self, mqtt_client, topic, message):
-        print("New message on topic {0}: {1}".format(topic, message))
+        print(f"New message on topic {topic}: {message}")
         try:
             m = json.loads(message)
             self.message_list.append(m)
         except (ValueError, KeyError) as e:
             print(e)
         gc.collect()
-        print("Free memory after adding message: %d" % gc.mem_free())
+        print(f"Free memory after adding message: {gc.mem_free()}")
