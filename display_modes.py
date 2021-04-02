@@ -1,5 +1,6 @@
 from adafruit_display_text.label import Label
 from adafruit_bitmap_font import bitmap_font
+import adafruit_requests as requests
 import board
 from digitalio import DigitalInOut, Direction, Pull
 import displayio
@@ -100,7 +101,7 @@ class WeatherMode(displayio.Group):
             return 0xFF0000
 
 
-    def __init__(self,*,network=None,location=None,token=None):
+    def __init__(self,*,location=None,token=None):
         super().__init__(max_size=3)
 
         self.WEATHER_URL = "http://api.openweathermap.org/data/2.5/weather?q={}&units=metric&appid={}"\
@@ -113,8 +114,6 @@ class WeatherMode(displayio.Group):
         self.wdata = {}
         self.pressure = []
         self.pressure_slope = None
-
-        self.network = network
 
         self.font = FONT
 
@@ -162,7 +161,7 @@ class WeatherMode(displayio.Group):
         now = time.monotonic()
         if not self.data_timestamp or now - self.data_timestamp > self.data_timeout:
             try:
-                self.wdata = self.network.fetch_data(self.WEATHER_URL,json_path=([],))
+                self.wdata = requests.get(self.WEATHER_URL).json()
                 print("Response is", self.wdata)
                 self.data_timestamp = now
             except RuntimeError as e:

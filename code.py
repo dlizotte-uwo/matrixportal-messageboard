@@ -1,10 +1,13 @@
 import gc
 import sys
-from adafruit_matrixportal.network import Network
+from digitalio import DigitalInOut, Direction, Pull
+import busio
+import adafruit_requests as requests
 import framebufferio
 import rgbmatrix
 from displayio import release_displays
 import adafruit_minimqtt.adafruit_minimqtt as MQTT
+from adafruit_esp32spi import adafruit_esp32spi
 import adafruit_esp32spi.adafruit_esp32spi_socket as socket
 import time
 import board
@@ -14,7 +17,7 @@ gc.collect()
 from display_modes import AirMode, WeatherMode, MessageMode, up_button
 
 if not up_button.value:
-    error_file = open("error_log.txt","aw")
+    error_file = open("error_log.txt", "aw")
 else:
     error_file = None
 
@@ -31,10 +34,10 @@ except ImportError:
 release_displays()
 matrix = rgbmatrix.RGBMatrix(
     width=64, bit_depth=5,
-    rgb_pins=[board.MTX_R1,board.MTX_G1,board.MTX_B1,
-        board.MTX_R2,board.MTX_G2,board.MTX_B2],
-    addr_pins=[board.MTX_ADDRA,board.MTX_ADDRB,
-        board.MTX_ADDRC, board.MTX_ADDRD],
+    rgb_pins=[board.MTX_R1, board.MTX_G1, board.MTX_B1,
+              board.MTX_R2, board.MTX_G2, board.MTX_B2],
+    addr_pins=[board.MTX_ADDRA, board.MTX_ADDRB,
+               board.MTX_ADDRC, board.MTX_ADDRD],
     clock_pin=board.MTX_CLK,
     latch_pin=board.MTX_LAT,
     output_enable_pin=board.MTX_OE
@@ -44,14 +47,40 @@ display = framebufferio.FramebufferDisplay(matrix)
 display.rotation = 180
 
 # --- Network Setup ---
-network = Network(status_neopixel=board.NEOPIXEL)
-network.connect()
+# If you are using a board with pre-defined ESP32 Pins:
+esp32_cs = DigitalInOut(board.ESP_CS)
+esp32_ready = DigitalInOut(board.ESP_BUSY)
+esp32_reset = DigitalInOut(board.ESP_RESET)
+spi = busio.SPI(board.SCK, board.MOSI, board.MISO)
+esp = adafruit_esp32spi.ESP_SPIcontrol(spi, esp32_cs, esp32_ready, esp32_reset)
+
+requests.set_socket(socket, esp)
+
+if esp.status == adafruit_esp32spi.WL_IDLE_STATUS:
+    print("ESP32 found and in idle mode")
+print("Firmware vers.", esp.firmware_version)
+print("MAC addr:", [hex(i) for i in esp.MAC_address])
+
+for ap in esp.scan_networks():
+    print("\t%s\t\tRSSI: %d" % (str(ap["ssid"], "utf-8"), ap["rssi"]))
+
+print("Connecting to AP...")
+while not esp.is_connected:
+    try:
+        esp.connect_AP(secrets["ssid"], secrets["password"])
+    except RuntimeError as e:
+        print("could not connect to AP, retrying: ", e)
+        continue
+print("Connected to", str(esp.ssid, "utf-8"), "\tRSSI:", esp.rssi)
+
 gc.collect()
+
 print(f"Free memory after network connect: {gc.mem_free()}")
 
 air_mode = AirMode()
 message_mode = MessageMode()
-weather_mode = WeatherMode(network=network,location=secrets["openweather_location"],token=secrets["openweather_token"])
+weather_mode = WeatherMode(location=secrets["openweather_location"],
+                           token=secrets["openweather_token"])
 current_mode = weather_mode
 
 # Handle mqtt message to set display mode: On/Off Air, Messages, Weather
@@ -72,6 +101,7 @@ def display_mode(mqtt_client, topic, message):
     elif message == "Weather":
         weather_mode.display_timestamp = time.monotonic()
         current_mode = weather_mode
+        message_mode.persist = False
     current_mode.update()
     display.show(current_mode)
 
@@ -82,7 +112,8 @@ def display_message(mqtt_client, topic, message):
 # ========= Set up MQTT ============
 
 # Set socket for MQTT
-MQTT.set_socket(socket, network._wifi.esp)
+#MQTT.set_socket(socket, network._wifi.esp)
+MQTT.set_socket(socket, esp)
 
 # Set up a MiniMQTT Client
 mqtt_client = MQTT.MQTT(
@@ -93,13 +124,13 @@ mqtt_client = MQTT.MQTT(
     is_ssl=True,
 )
 
-#mqtt_client.enable_logger(logging,logging.DEBUG)
+# mqtt_client.enable_logger(logging,logging.DEBUG)
 
 print(f"Attempting to connect to {mqtt_client.broker}")
 mqtt_client.connect(keep_alive=60)
 
 print("Subscribing to topics.")
-mqtt_client.subscribe("display/#",qos=1)
+mqtt_client.subscribe("display/#", qos=1)
 
 # Dispatch to function for changing overall mode
 mqtt_client.add_topic_callback("display/mode", display_mode)
@@ -135,10 +166,10 @@ while True:
                     current_mode.update()
                 display.show(current_mode)
                 gc.collect()
-        #print(gc.mem_free())
+        # print(gc.mem_free())
     except BaseException as e:
         print(str(e))
         if error_file:
-            sys.print_exception(e,error_file)
+            sys.print_exception(e, error_file)
             error_file.close()
         raise e
