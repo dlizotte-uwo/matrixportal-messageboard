@@ -98,8 +98,6 @@ mqtt_client = MQTT.MQTT(
 print(f"Attempting to connect to {mqtt_client.broker}")
 mqtt_client.connect(keep_alive=60)
 
-mqtt_client.publish("display/test","Foo",retain=False,qos=0)
-
 print("Subscribing to topics.")
 mqtt_client.subscribe("display/#",qos=1)
 
