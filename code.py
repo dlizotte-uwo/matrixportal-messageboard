@@ -1,6 +1,9 @@
 import gc
 import sys
-from adafruit_matrixportal.matrixportal import Graphics,Network
+from adafruit_matrixportal.network import Network
+import framebufferio
+import rgbmatrix
+from displayio import release_displays
 import adafruit_minimqtt.adafruit_minimqtt as MQTT
 import adafruit_esp32spi.adafruit_esp32spi_socket as socket
 import time
@@ -25,13 +28,23 @@ except ImportError:
     raise
 
 # --- Display setup ---
-network = Network(status_neopixel=board.NEOPIXEL)
-graphics = Graphics(bit_depth=5)
-display = graphics.display
-
+release_displays()
+matrix = rgbmatrix.RGBMatrix(
+    width=64, bit_depth=5,
+    rgb_pins=[board.MTX_R1,board.MTX_G1,board.MTX_B1,
+        board.MTX_R2,board.MTX_G2,board.MTX_B2],
+    addr_pins=[board.MTX_ADDRA,board.MTX_ADDRB,
+        board.MTX_ADDRC, board.MTX_ADDRD],
+    clock_pin=board.MTX_CLK,
+    latch_pin=board.MTX_LAT,
+    output_enable_pin=board.MTX_OE
+)
+display = framebufferio.FramebufferDisplay(matrix)
 # Rotate display if needed
 display.rotation = 180
 
+# --- Network Setup ---
+network = Network(status_neopixel=board.NEOPIXEL)
 network.connect()
 gc.collect()
 print(f"Free memory after network connect: {gc.mem_free()}")
@@ -84,6 +97,8 @@ mqtt_client = MQTT.MQTT(
 
 print(f"Attempting to connect to {mqtt_client.broker}")
 mqtt_client.connect(keep_alive=60)
+
+mqtt_client.publish("display/test","Foo",retain=False,qos=0)
 
 print("Subscribing to topics.")
 mqtt_client.subscribe("display/#",qos=1)
