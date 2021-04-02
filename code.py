@@ -7,10 +7,14 @@ import framebufferio
 import rgbmatrix
 from displayio import release_displays
 import adafruit_minimqtt.adafruit_minimqtt as MQTT
+import neopixel
 from adafruit_esp32spi import adafruit_esp32spi
+from adafruit_esp32spi import adafruit_esp32spi_wifimanager
 import adafruit_esp32spi.adafruit_esp32spi_socket as socket
 import time
 import board
+
+#import adafruit_logging as logging
 
 gc.collect()
 
@@ -54,24 +58,12 @@ esp32_reset = DigitalInOut(board.ESP_RESET)
 spi = busio.SPI(board.SCK, board.MOSI, board.MISO)
 esp = adafruit_esp32spi.ESP_SPIcontrol(spi, esp32_cs, esp32_ready, esp32_reset)
 
-requests.set_socket(socket, esp)
-
-if esp.status == adafruit_esp32spi.WL_IDLE_STATUS:
-    print("ESP32 found and in idle mode")
-print("Firmware vers.", esp.firmware_version)
-print("MAC addr:", [hex(i) for i in esp.MAC_address])
-
-for ap in esp.scan_networks():
-    print("\t%s\t\tRSSI: %d" % (str(ap["ssid"], "utf-8"), ap["rssi"]))
-
-print("Connecting to AP...")
-while not esp.is_connected:
-    try:
-        esp.connect_AP(secrets["ssid"], secrets["password"])
-    except RuntimeError as e:
-        print("could not connect to AP, retrying: ", e)
-        continue
-print("Connected to", str(esp.ssid, "utf-8"), "\tRSSI:", esp.rssi)
+"""Use below for Most Boards"""
+status_light = neopixel.NeoPixel(
+    board.NEOPIXEL, 1, brightness=0.2
+)
+requests = adafruit_esp32spi_wifimanager.ESPSPI_WiFiManager(esp, secrets, status_light)
+requests.connect()
 
 gc.collect()
 
@@ -79,7 +71,8 @@ print(f"Free memory after network connect: {gc.mem_free()}")
 
 air_mode = AirMode()
 message_mode = MessageMode()
-weather_mode = WeatherMode(location=secrets["openweather_location"],
+weather_mode = WeatherMode(network=requests,
+                           location=secrets["openweather_location"],
                            token=secrets["openweather_token"])
 current_mode = weather_mode
 
@@ -124,7 +117,7 @@ mqtt_client = MQTT.MQTT(
     is_ssl=True,
 )
 
-# mqtt_client.enable_logger(logging,logging.DEBUG)
+# mqtt_client.enable_logger(logging,log_level=logging.DEBUG)
 
 print(f"Attempting to connect to {mqtt_client.broker}")
 mqtt_client.connect(keep_alive=60)
@@ -139,6 +132,8 @@ mqtt_client.add_topic_callback("display/mode", display_mode)
 mqtt_client.add_topic_callback("display/message", display_message)
 
 gc.collect()
+
+# mqtt_client.publish("display/mode","OnAir",qos=1)
 
 if current_mode:
     display.show(current_mode)
