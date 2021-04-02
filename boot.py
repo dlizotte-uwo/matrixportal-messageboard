@@ -7,6 +7,6 @@ up_button.pull = Pull.UP
 if not up_button.value:
     import storage
     storage.remount("/", False)
-    error_file = open("error_log.txt",'w')
-else:
-    error_file = None
+    led = DigitalInOut(board.L)
+    led.direction = Direction.OUTPUT
+    led.value = True

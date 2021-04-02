@@ -80,13 +80,13 @@ mqtt_client = MQTT.MQTT(
     is_ssl=True,
 )
 
-# mqtt_client.enable_logger(logging,logging.DEBUG)
+#mqtt_client.enable_logger(logging,logging.DEBUG)
 
 print(f"Attempting to connect to {mqtt_client.broker}")
 mqtt_client.connect(keep_alive=60)
 
 print("Subscribing to topics.")
-mqtt_client.subscribe("display/#")
+mqtt_client.subscribe("display/#",qos=1)
 
 # Dispatch to function for changing overall mode
 mqtt_client.add_topic_callback("display/mode", display_mode)
@@ -127,4 +127,5 @@ while True:
         print(str(e))
         if error_file:
             sys.print_exception(e,error_file)
+            error_file.close()
         raise e
