@@ -14,14 +14,21 @@ import adafruit_esp32spi.adafruit_esp32spi_socket as socket
 import time
 import board
 
-#import adafruit_logging as logging
+from file_handler import FileHandler
+import adafruit_logging as logging
 
 gc.collect()
 
 from display_modes import AirMode, WeatherMode, MessageMode, up_button
 
+led = DigitalInOut(board.L)
+led.direction = Direction.OUTPUT
+led.value = False
+
 if not up_button.value:
-    error_file = open("error_log.txt", "aw")
+    error_file = open("error_log.txt", "w")
+    print("Opened log file.",file=error_file)
+    error_file.flush()
 else:
     error_file = None
 
@@ -80,11 +87,8 @@ current_mode = weather_mode
 def display_mode(mqtt_client, topic, message):
     global current_mode
     print(f"New message on topic {topic}: {message}")
-    if message == "OnAir":
-        air_mode.set_submode("OnAir")
-        current_mode = air_mode
-    elif message == "OffAir":
-        air_mode.set_submode("OffAir")
+    if message in air_mode.submodes:
+        air_mode.set_submode(message)
         current_mode = air_mode
     elif message == "Messages" and message_mode:
         message_mode.display_timestamp = 0
@@ -95,7 +99,7 @@ def display_mode(mqtt_client, topic, message):
         weather_mode.display_timestamp = time.monotonic()
         current_mode = weather_mode
         message_mode.persist = False
-    current_mode.update()
+    # current_mode.update()
     display.show(current_mode)
 
 # Handle display/message messages to add new message
@@ -115,25 +119,32 @@ mqtt_client = MQTT.MQTT(
     username=secrets["mqtt_username"],
     password=secrets["mqtt_passwd"],
     is_ssl=True,
+    client_id=secrets["mqtt_client_id"]
 )
 
-# mqtt_client.enable_logger(logging,log_level=logging.DEBUG)
+mqtt_client.enable_logger(logging,log_level=logging.INFO)
+if error_file:
+    mqtt_client.logger.addHandler(FileHandler(error_file))
 
 print(f"Attempting to connect to {mqtt_client.broker}")
-mqtt_client.connect(keep_alive=60)
+mqtt_client.connect(clean_session=False)
+if error_file:
+    print("Connected at %s\n" % time.monotonic())
+    error_file.write("Connected at %s\n" % time.monotonic())
+    error_file.flush()
 
 print("Subscribing to topics.")
 mqtt_client.subscribe("display/#", qos=1)
 
 # Dispatch to function for changing overall mode
+mqtt_client.add_topic_callback("display/{}/mode".format(secrets['matrix_subtopic']), display_mode)
 mqtt_client.add_topic_callback("display/mode", display_mode)
 
 # Dispatch directly to text_message object
+mqtt_client.add_topic_callback("display/{}/message".format(secrets['matrix_subtopic']), display_message)
 mqtt_client.add_topic_callback("display/message", display_message)
 
 gc.collect()
-
-# mqtt_client.publish("display/mode","OnAir",qos=1)
 
 if current_mode:
     display.show(current_mode)
@@ -144,6 +155,9 @@ print(f"Free memory after show: {gc.mem_free()}")
 while True:
     try:
         mqtt_client.loop(.01)
+        if not up_button.value:
+            if error_file:
+                error_file.flush()
         if current_mode:
             if not current_mode.update():
                 # Current mode returns False if it's "done"
@@ -162,8 +176,50 @@ while True:
                 display.show(current_mode)
                 gc.collect()
         # print(gc.mem_free())
+    except MQTT.MMQTTException as e:
+        led.value = True
+        sys.print_exception(e)
+        if error_file:
+            error_file.write("MMQTT Exception: ")
+            sys.print_exception(e, error_file)
+            error_file.write("Trying to reconnect...")
+            error_file.flush()
+        try:
+            mqtt_client.reconnect(qos=1)
+        except BaseException as e:
+            sys.print_exception(e)
+            if error_file:
+                sys.print_exception(e, error_file)
+                error_file.close()
+            raise e
+    except RuntimeError as e:
+        led.value = True
+        sys.print_exception(e)
+        if error_file:
+            sys.print_exception(e, error_file)
+            error_file.write("Timestamp: %s\n" % time.monotonic())
+            error_file.write("Time since ping: {}\n".format(time.monotonic() - mqtt_client._timestamp))
+            error_file.write("Trying to reconnect...\n")
+            error_file.flush()
+        try:
+            # Try just reconnecting mqtt_client
+            mqtt_client.reconnect(qos=1)
+            if error_file:
+                error_file.write("Reconnected at %s\n" % time.monotonic())
+                error_file.flush()
+        except BaseException as e:
+            sys.print_exception(e)
+            if error_file:
+                sys.print_exception(e, error_file)
+                error_file.write("Resetting ESP32\n")
+                error_file.flush()
+            # Reset the ESP32
+            requests.reset()
+            requests.connect()
+            mqtt_client.reconnect(qos=1)
     except BaseException as e:
-        print(str(e))
+        led.value = True
+        sys.print_exception(e)
         if error_file:
             sys.print_exception(e, error_file)
             error_file.close()
